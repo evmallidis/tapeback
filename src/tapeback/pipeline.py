@@ -39,6 +39,7 @@ from tapeback.diarizer import (
     merge_similar_speakers,
 )
 from tapeback.formatter import TranscriptMeta, format_markdown
+from tapeback.meetings_export import export as meetings_export
 from tapeback.models import DiarizationSegment, Segment
 from tapeback.recorder import Recorder, validate_session_name
 from tapeback.settings import Settings
@@ -111,6 +112,14 @@ def stop_and_process(
         md_path = save_markdown_to_vault(markdown, settings, session_name)
         report(f"Saved: {md_path}")
 
+        meetings_export(
+            segments,
+            session_name=session_name,
+            info=info,
+            settings=settings,
+            on_status=report,
+        )
+
         if live_transcriber is not None:
             remove_live_markdown(settings, session_name)
 
@@ -166,6 +175,14 @@ def process_file(
 
         md_path = save_markdown_to_vault(markdown, settings, name)
         report(f"Saved: {md_path}")
+
+        meetings_export(
+            segments,
+            session_name=name,
+            info=info,
+            settings=settings,
+            on_status=report,
+        )
 
         if do_summarize:
             _maybe_summarize(md_path, settings, report)

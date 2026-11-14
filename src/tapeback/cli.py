@@ -426,6 +426,32 @@ def setup(diarize: bool | None, summarize: bool | None) -> None:
         click.echo("Hint: a running tray keeps its old settings until it is restarted.")
 
 
+@cli.command(name="meetings-sync")
+def meetings_sync() -> None:
+    """Upload staged transcripts to the meetings-mcp server.
+
+    Retries every bundle still in the export dir — export keeps a bundle on
+    disk when its scp fails, and the next export or this command delivers it.
+    No-op unless TAPEBACK_MEETINGS_MACHINE and TAPEBACK_MEETINGS_REMOTE are set.
+    """
+    settings = get_settings()
+
+    if not settings.meetings_machine:
+        click.echo(
+            "meetings-mcp export is off (TAPEBACK_MEETINGS_MACHINE is not set).",
+            err=True,
+        )
+        return
+    if not settings.meetings_remote:
+        click.echo("TAPEBACK_MEETINGS_REMOTE is not set — nothing to upload to.", err=True)
+        return
+
+    from tapeback.meetings_export import sync_pending
+
+    sent = sync_pending(settings, on_status=_echo_status)
+    click.echo(f"meetings-mcp: {sent} transcript(s) uploaded.", err=True)
+
+
 @cli.command()
 def tray() -> None:
     """Run tapeback as a system tray icon.

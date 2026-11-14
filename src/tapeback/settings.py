@@ -260,6 +260,17 @@ class Settings(BaseSettings):
     # some 15 minutes on a clamped card; TAPEBACK_LLM_TIMEOUT stays the cloud's.
     llm_local_timeout: float = Field(default=1800.0, gt=0.0)
 
+    # meetings-mcp export — opt-in, all off while meetings_machine is empty.
+    # With it set, every finished transcript is also staged as an AudioLogger-format
+    # bundle (transcript.md + metadata.json) under the export dir, and uploaded with
+    # scp to meetings_remote:meetings_incoming — the same staging contract the
+    # Windows clients' Sync-Meetings.ps1 fulfils. See meetings_export.py.
+    meetings_machine: str = ""
+    meetings_remote: str = ""
+    meetings_incoming: str = "/opt/meetings/incoming"
+    # None → XDG data dir (~/.local/share/tapeback/meetings-export).
+    meetings_export_dir: Path | None = None
+
     @model_validator(mode="after")
     def _resolve_stt_settings(self) -> Self:
         """Resolve stt_model defaults; accept deprecated TAPEBACK_WHISPER_MODEL."""
@@ -286,7 +297,13 @@ class Settings(BaseSettings):
             openai_capabilities_for(model)
         return self
 
-    @field_validator("vault_path", "run_log_dir", "resume_cache_dir", "sessions_dir")
+    @field_validator(
+        "vault_path",
+        "run_log_dir",
+        "resume_cache_dir",
+        "sessions_dir",
+        "meetings_export_dir",
+    )
     @classmethod
     def _expand_home(cls, value: Path | None) -> Path | None:
         """`~` is the home directory, as in a shell: README's quick start writes the vault

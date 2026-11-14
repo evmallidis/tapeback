@@ -523,8 +523,22 @@ setting may start with `~`, your home directory.
 | `TAPEBACK_LLM_LOCAL_CONTEXT` | `16384` | `local` only: the context in tokens. An hour of Russian conversation is about 12k; a longer one needs more, and more VRAM |
 | `TAPEBACK_LLM_LOCAL_CLAMP_WAIT` | `600` | `local` only: seconds to wait for a GPU thermal clamp to release before the server starts |
 | `TAPEBACK_LLM_LOCAL_TIMEOUT` | `1800` | `local` only: seconds to wait for one answer |
+| `TAPEBACK_MEETINGS_MACHINE` | *(empty — off)* | Machine id for the meetings-mcp export (e.g. `pop-desktop`); set it to enable |
+| `TAPEBACK_MEETINGS_REMOTE` | *(empty)* | `user@host` the transcript bundles are scp'ed to; empty = stage only, no upload |
+| `TAPEBACK_MEETINGS_INCOMING` | `/opt/meetings/incoming` | Remote directory the meetings-mcp watcher ingests |
+| `TAPEBACK_MEETINGS_EXPORT_DIR` | `~/.local/share/tapeback/meetings-export` | Local staging dir; bundles that failed to upload stay here for `tapeback meetings-sync` |
 
 </details>
+
+### meetings-mcp export
+
+Fork addition: alongside the Obsidian note, every finished transcript can be
+staged as an AudioLogger-format bundle (`transcript.md` + `metadata.json`) and
+uploaded to a [meetings-mcp](https://github.com/evmallidis/meetings-mcp) server
+with `scp` — the same contract the Windows clients' `Sync-Meetings.ps1` fulfils.
+Set `TAPEBACK_MEETINGS_MACHINE` to enable it; without `TAPEBACK_MEETINGS_REMOTE`
+the bundle is only kept locally. A failed upload is retried on the next export
+or by running `tapeback meetings-sync`.
 
 ## Troubleshooting
 

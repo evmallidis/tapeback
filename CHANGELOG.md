@@ -10,6 +10,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 <!-- New entries go HERE, via scripts/changelog_add.py — never under a dated release. -->
 <!-- Subsections in order: Security / Added / Changed / Fixed / Removed / Docs. -->
 
+### Added
+- **meetings-mcp export.** With TAPEBACK_MEETINGS_MACHINE set, every finished transcript is also staged as an AudioLogger-format bundle and scp'ed to a meetings-mcp server; tapeback meetings-sync retries failed uploads.
+
 ## [0.10.2] — 2026-10-30
 
 ### Added
