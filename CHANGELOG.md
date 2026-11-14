@@ -17,6 +17,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 - **Tray icon invisible on COSMIC.** The tray now registers the full bus-name/object-path form, ships real IconPixmap bitmaps plus tapeback-* PNGs under IconThemePath and the user's hicolor theme, and a blank TAPEBACK_AUTO_STOP_* / TAPEBACK_AUDIO_RETENTION_DAYS value disables the knob instead of crashing startup.
+- **Tray invisible after login.** Registration with the StatusNotifierWatcher now retries for ~2 minutes — autostart fires before the panel applet claims the watcher name, and a single failed attempt left the tray running but invisible for the whole session.
 
 ## [0.10.2] — 2026-10-30
 

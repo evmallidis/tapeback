@@ -143,14 +143,10 @@ class TrayApp:
             # connect() should always populate this; if it didn't, we have no
             # name to register and the tray is unreachable anyway.
             raise RuntimeError("D-Bus connect returned without a unique name")
-        try:
-            # Full "bus-name/object-path" form: some watchers (COSMIC's applet)
-            # do not resolve a bare bus name to the default SNI path, and the
-            # icon never renders.
-            await register_with_watcher(self._bus, f"{unique_name}{SNI_OBJECT_PATH}")
-            logger.info("Tray registered with StatusNotifierWatcher")
-        except Exception:
-            logger.exception("Failed to register with StatusNotifierWatcher")
+        # Full "bus-name/object-path" form: some watchers (COSMIC's applet) do not
+        # resolve a bare bus name to the default SNI path, and the icon never renders.
+        item_name = f"{unique_name}{SNI_OBJECT_PATH}"
+        if not await _register_with_retry(self._bus, item_name, self._stopped):
             logger.warning(
                 "Tray will not appear. On GNOME install "
                 "gnome-shell-extension-appindicator and re-login."
@@ -266,6 +262,51 @@ class TrayApp:
                     logger.exception("Error stopping recording on quit")
         if self._stopped is not None and self._loop is not None:
             self._loop.call_soon_threadsafe(self._stopped.set)
+
+
+# Autostart runs before the desktop's panel applet claims the watcher name, so a
+# single registration attempt loses the race and the tray idles invisibly for the
+# whole session. ~2 minutes of retries covers a slow login; the delay doubles as
+# the wait between attempts.
+_REGISTER_ATTEMPTS = 24
+_REGISTER_RETRY_DELAY_S = 5.0
+
+
+async def _register_with_retry(
+    bus: MessageBus,
+    item_name: str,
+    stopped: asyncio.Event,
+    *,
+    attempts: int = _REGISTER_ATTEMPTS,
+    delay: float = _REGISTER_RETRY_DELAY_S,
+) -> bool:
+    """Register the SNI with the watcher, retrying while the desktop starts up.
+
+    Returns False once attempts are exhausted or `stopped` fires, so the tray can
+    still be quit while the watcher never appears.
+    """
+    for attempt in range(attempts):
+        try:
+            await register_with_watcher(bus, item_name)
+            logger.info("Tray registered with StatusNotifierWatcher")
+            return True
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            if attempt == attempts - 1:
+                logger.exception("Failed to register with StatusNotifierWatcher")
+            else:
+                logger.warning(
+                    "StatusNotifierWatcher not ready (%s); retrying in %.0fs",
+                    exc,
+                    delay,
+                )
+            try:
+                await asyncio.wait_for(stopped.wait(), delay)
+                return False
+            except TimeoutError:
+                continue
+    return False
 
 
 def _warn_if_tray_host_missing(env: TrayEnv) -> None:

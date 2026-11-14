@@ -7,7 +7,7 @@ from tests.fixtures import requires_dbus_next
 
 pytestmark = requires_dbus_next
 
-from tapeback.tray import TrayState, build_menu_items  # noqa: E402
+from tapeback.tray import TrayState, _register_with_retry, build_menu_items  # noqa: E402
 
 # --- Menu layout (pure function) ---
 
@@ -219,3 +219,59 @@ def test_update_state_sets_icon_tooltip_and_refreshes_menu(tray_app):
     assert pixmaps[0][0] == 22 and pixmaps[0][1] == 22
     tray_app._sni.set_tooltip.assert_called_once()
     tray_app._menu.replace_items.assert_called_once()
+
+
+# --- watcher registration retry (login race) ---
+
+
+def test_register_with_retry_succeeds_once_watcher_appears(monkeypatch):
+    """Autostart fires before the watcher claims its name; retries must win."""
+    import asyncio  # noqa: PLC0415
+
+    calls: list[str] = []
+
+    async def late_watcher(bus, name):
+        calls.append(name)
+        if len(calls) < 3:
+            raise RuntimeError("ServiceUnknown")
+
+    monkeypatch.setattr("tapeback.tray.register_with_watcher", late_watcher)
+
+    assert asyncio.run(
+        _register_with_retry(
+            MagicMock(), ":1.9/StatusNotifierItem", asyncio.Event(), delay=0
+        )
+    )
+    assert calls == [":1.9/StatusNotifierItem"] * 3
+
+
+def test_register_with_retry_gives_up_when_watcher_never_appears(monkeypatch):
+    """No watcher at all (GNOME without AppIndicator) — stop retrying, stay quit-able."""
+    import asyncio  # noqa: PLC0415
+
+    async def never(bus, name):
+        raise RuntimeError("ServiceUnknown")
+
+    monkeypatch.setattr("tapeback.tray.register_with_watcher", never)
+
+    assert not asyncio.run(
+        _register_with_retry(
+            MagicMock(), ":1.9/x", asyncio.Event(), attempts=2, delay=0
+        )
+    )
+
+
+def test_register_with_retry_stops_when_tray_quits(monkeypatch):
+    """Quit during the wait between attempts ends the loop instead of hanging."""
+    import asyncio  # noqa: PLC0415
+
+    async def never(bus, name):
+        raise RuntimeError("ServiceUnknown")
+
+    monkeypatch.setattr("tapeback.tray.register_with_watcher", never)
+    stopped = asyncio.Event()
+    stopped.set()
+
+    assert not asyncio.run(
+        _register_with_retry(MagicMock(), ":1.9/x", stopped, delay=60)
+    )
