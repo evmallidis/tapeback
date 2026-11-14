@@ -2,9 +2,16 @@
 
 import json
 import os
+import time
 from pathlib import Path
 
-from tapeback.meetings_export import export, render_transcript, sync_pending
+from tapeback.meetings_export import (
+    export,
+    export_root,
+    prune_uploaded_audio,
+    render_transcript,
+    sync_pending,
+)
 from tapeback.models import Segment
 from tapeback.settings import Settings
 
@@ -181,3 +188,78 @@ def test_export_never_raises(tmp_path, monkeypatch):
         )
         is None
     )
+
+
+def _old_vault_audio(settings, session_name, age_days):
+    """A vault audio file with a controlled mtime, as save_audio_to_vault names it."""
+    audio = settings.vault_path / settings.attachments_dir / f"{session_name}.wav"
+    audio.parent.mkdir(parents=True, exist_ok=True)
+    audio.write_bytes(b"wav")
+    old = time.time() - age_days * 86400
+    os.utime(audio, (old, old))
+    return audio
+
+
+def test_retention_deletes_only_old_uploaded_audio(tmp_path):
+    settings = _export_settings(tmp_path, audio_retention_days=30)
+    root = export_root(settings)
+    root.mkdir(parents=True)
+    (root / "sent.json").write_text(
+        json.dumps({"2026-10-01_10-00-00": 1.0, "2026-10-02_10-00-00": 1.0})
+    )
+    old_uploaded = _old_vault_audio(settings, "2026-10-01_10-00-00", age_days=40)
+    old_local = _old_vault_audio(settings, "local-only", age_days=40)
+    recent_uploaded = _old_vault_audio(settings, "2026-10-02_10-00-00", age_days=10)
+
+    assert prune_uploaded_audio(settings) == 1
+    assert not old_uploaded.exists()
+    assert old_local.exists()  # never uploaded — kept
+    assert recent_uploaded.exists()  # too young — kept
+
+
+def test_retention_zero_keeps_everything(tmp_path):
+    settings = _export_settings(tmp_path, audio_retention_days=0)
+    root = export_root(settings)
+    root.mkdir(parents=True)
+    (root / "sent.json").write_text(json.dumps({"2026-10-01_10-00-00": 1.0}))
+    audio = _old_vault_audio(settings, "2026-10-01_10-00-00", age_days=400)
+
+    assert prune_uploaded_audio(settings) == 0
+    assert audio.exists()
+
+
+def test_upload_marks_session_sent_for_retention(tmp_path, monkeypatch):
+    _fake_scp(tmp_path, monkeypatch, rc=0)
+    settings = _export_settings(
+        tmp_path, meetings_remote="me@host.tailnet.ts.net", audio_retention_days=30
+    )
+    export(
+        _segments(),
+        session_name="2026-10-01_10-00-00",
+        info={},
+        settings=settings,
+    )
+    sent = json.loads((export_root(settings) / "sent.json").read_text())
+    assert list(sent) == ["2026-10-01_10-00-00"]
+    audio = _old_vault_audio(settings, "2026-10-01_10-00-00", age_days=40)
+    assert sync_pending(settings) == 0  # nothing left to send
+    assert not audio.exists()  # retention ran during the sync
+
+
+def test_export_root_default_uses_xdg_data(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    settings = Settings(vault_path=tmp_path / "vault")
+    assert export_root(settings) == tmp_path / "xdg" / "tapeback" / "meetings-export"
+
+
+def test_prune_ignores_corrupt_sent_state(tmp_path):
+    settings = _export_settings(tmp_path, audio_retention_days=30)
+    root = export_root(settings)
+    root.mkdir(parents=True)
+    (root / "sent.json").write_text("not json")
+    assert prune_uploaded_audio(settings) == 0
+
+
+def test_sync_pending_without_export_dir_is_zero(tmp_path):
+    settings = _export_settings(tmp_path, meetings_remote="me@host.tailnet.ts.net")
+    assert sync_pending(settings) == 0

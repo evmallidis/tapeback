@@ -271,6 +271,17 @@ class Settings(BaseSettings):
     # None → XDG data dir (~/.local/share/tapeback/meetings-export).
     meetings_export_dir: Path | None = None
 
+    # Auto-stop a recording that outlived the meeting; 0 disables each trigger.
+    # An auto-stopped recording goes through the normal pipeline and is transcribed.
+    # Hours: hard cap on one recording (e.g. 8 catches one left running overnight).
+    auto_stop_hours: float = Field(default=0.0, ge=0.0)
+    # Silence: stop when mic AND system audio both stayed silent this many minutes.
+    auto_stop_silence_minutes: float = Field(default=0.0, ge=0.0)
+
+    # Local audio retention: delete vault audio older than this many days, but only
+    # when its transcript was confirmed uploaded to meetings-mcp. 0 = keep everything.
+    audio_retention_days: int = Field(default=0, ge=0)
+
     @model_validator(mode="after")
     def _resolve_stt_settings(self) -> Self:
         """Resolve stt_model defaults; accept deprecated TAPEBACK_WHISPER_MODEL."""

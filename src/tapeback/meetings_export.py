@@ -29,6 +29,7 @@ import re
 import secrets
 import shutil
 import subprocess
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -43,6 +44,7 @@ StatusCallback = Callable[[str], None]
 
 TRANSCRIPT_NAME = "transcript.md"
 METADATA_NAME = "metadata.json"
+SENT_STATE_NAME = "sent.json"
 
 # The recorder names sessions YYYY-MM-DD_HH-MM-SS, but `tapeback start <name>`
 # and `tapeback process <file> --name <name>` accept anything, so a session can
@@ -155,6 +157,58 @@ def _upload(staging: Path, remote: str, incoming: str) -> bool:
     return result.returncode == 0
 
 
+def _sent_state_path(root: Path) -> Path:
+    return root / SENT_STATE_NAME
+
+
+def _mark_sent(root: Path, session_name: str) -> None:
+    """Remember a session's transcript was uploaded, so audio retention may delete it."""
+    path = _sent_state_path(root)
+    try:
+        sent = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        sent = {}
+    sent[session_name] = time.time()
+    path.write_text(json.dumps(sent, indent=2), encoding="utf-8")
+
+
+def _session_of_staging(staging_name: str) -> str:
+    """A staging dir is '<session>-<6 hex chars>'; the session may hold dashes."""
+    return staging_name.rsplit("-", 1)[0]
+
+
+def prune_uploaded_audio(
+    settings: Settings,
+    on_status: StatusCallback = _noop_status,
+) -> int:
+    """Delete vault audio older than audio_retention_days whose transcript uploaded.
+
+    Only files named <session>.wav in the vault's attachments dir, and only
+    sessions the sent-state file proves were uploaded — never a recording that
+    exists only locally. 0 retention days (the default) deletes nothing.
+    """
+    days = settings.audio_retention_days
+    if days <= 0:
+        return 0
+    root = export_root(settings)
+    try:
+        sent = json.loads(_sent_state_path(root).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return 0
+    cutoff = time.time() - days * 86400
+    pruned = 0
+    for session_name in sent:
+        audio = settings.vault_path / settings.attachments_dir / f"{session_name}.wav"
+        try:
+            if audio.is_file() and audio.stat().st_mtime < cutoff:
+                audio.unlink()
+                pruned += 1
+                on_status(f"meetings-mcp: deleted old audio {audio.name}")
+        except OSError:
+            continue
+    return pruned
+
+
 def sync_pending(
     settings: Settings,
     on_status: StatusCallback = _noop_status,
@@ -174,10 +228,14 @@ def sync_pending(
         if not (staging / TRANSCRIPT_NAME).is_file():
             continue
         if _upload(staging, settings.meetings_remote, settings.meetings_incoming):
+            _mark_sent(root, _session_of_staging(staging.name))
             shutil.rmtree(staging, ignore_errors=True)
             sent += 1
         else:
             on_status(f"meetings-mcp: upload failed, kept for retry: {staging.name}")
+    pruned = prune_uploaded_audio(settings, on_status)
+    if pruned:
+        on_status(f"meetings-mcp: deleted {pruned} old audio file(s)")
     return sent
 
 

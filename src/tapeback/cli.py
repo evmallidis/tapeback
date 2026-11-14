@@ -108,19 +108,34 @@ def start(name: str | None, no_diarize: bool, no_summarize: bool, no_live: bool)
 
     _echo_remote_stt_notice(settings, live=live_active)
 
+    from tapeback._watchdog import RecordingWatchdog
+
+    watchdog = RecordingWatchdog(
+        session_path / const.FILE_MONITOR,
+        session_path / const.FILE_MIC,
+        settings,
+        on_status=_echo_status,
+    )
+    if settings.auto_stop_hours > 0 or settings.auto_stop_silence_minutes > 0:
+        watchdog.start()
+
     click.echo("Run 'tapeback stop' to finish and transcribe.", err=True)
     click.echo("Or press Ctrl+C to stop and transcribe now.", err=True)
 
     try:
-        while recorder.is_recording():
+        while recorder.is_recording() and not watchdog.stop_reason:
             time.sleep(1)
     except KeyboardInterrupt:
         pass
+    finally:
+        watchdog.close()
 
+    if watchdog.stop_reason:
+        click.echo(f"\nAuto-stopping: {watchdog.stop_reason}", err=True)
     # `tapeback stop` from another terminal owns the pipeline and clears the
     # session; do not call stop_and_process again or start crashes with
     # "No recording in progress."
-    if not recorder.is_recording():
+    elif not recorder.is_recording():
         return
 
     click.echo("\nStopping...", err=True)

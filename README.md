@@ -527,6 +527,9 @@ setting may start with `~`, your home directory.
 | `TAPEBACK_MEETINGS_REMOTE` | *(empty)* | `user@host` the transcript bundles are scp'ed to; empty = stage only, no upload |
 | `TAPEBACK_MEETINGS_INCOMING` | `/opt/meetings/incoming` | Remote directory the meetings-mcp watcher ingests |
 | `TAPEBACK_MEETINGS_EXPORT_DIR` | `~/.local/share/tapeback/meetings-export` | Local staging dir; bundles that failed to upload stay here for `tapeback meetings-sync` |
+| `TAPEBACK_AUTO_STOP_HOURS` | `0` (off) | Hard cap on one recording, in hours; an auto-stopped recording is still transcribed |
+| `TAPEBACK_AUTO_STOP_SILENCE_MINUTES` | `0` (off) | Stop when mic AND system audio both stayed silent this long |
+| `TAPEBACK_AUDIO_RETENTION_DAYS` | `0` (keep) | Delete vault audio older than this, only after its transcript was uploaded to meetings-mcp |
 
 </details>
 
@@ -539,6 +542,40 @@ with `scp` — the same contract the Windows clients' `Sync-Meetings.ps1` fulfil
 Set `TAPEBACK_MEETINGS_MACHINE` to enable it; without `TAPEBACK_MEETINGS_REMOTE`
 the bundle is only kept locally. A failed upload is retried on the next export
 or by running `tapeback meetings-sync`.
+
+To retry pending uploads periodically (offline laptop, sleeping machine), add a
+user timer — `~/.config/systemd/user/tapeback-meetings-sync.timer`:
+
+```ini
+[Unit]
+Description=Upload pending transcripts to meetings-mcp
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target
+```
+
+and `~/.config/systemd/user/tapeback-meetings-sync.service`:
+
+```ini
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/tapeback meetings-sync
+```
+
+Enable with `systemctl --user enable --now tapeback-meetings-sync.timer`.
+
+### Auto-stop and audio retention
+
+`TAPEBACK_AUTO_STOP_HOURS=8` catches a recording forgotten overnight;
+`TAPEBACK_AUTO_STOP_SILENCE_MINUTES=30` stops when the meeting ended but the
+recorder kept running (both channels silent). Either way the recording is
+transcribed as usual. `TAPEBACK_AUDIO_RETENTION_DAYS=30` deletes vault audio
+older than 30 days **only** when its transcript was confirmed uploaded to
+meetings-mcp; audio that exists only locally is never deleted.
 
 ## Troubleshooting
 

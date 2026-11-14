@@ -12,6 +12,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 - **meetings-mcp export.** With TAPEBACK_MEETINGS_MACHINE set, every finished transcript is also staged as an AudioLogger-format bundle and scp'ed to a meetings-mcp server; tapeback meetings-sync retries failed uploads.
+- **Auto-stop and audio retention.** TAPEBACK_AUTO_STOP_HOURS caps a recording, TAPEBACK_AUTO_STOP_SILENCE_MINUTES stops one after sustained silence on both channels, TAPEBACK_AUDIO_RETENTION_DAYS deletes old vault audio once its transcript was uploaded to meetings-mcp.
 
 ## [0.10.2] — 2026-10-30
 
