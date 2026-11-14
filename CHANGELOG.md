@@ -13,6 +13,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - **meetings-mcp export.** With TAPEBACK_MEETINGS_MACHINE set, every finished transcript is also staged as an AudioLogger-format bundle and scp'ed to a meetings-mcp server; tapeback meetings-sync retries failed uploads.
 - **Auto-stop and audio retention.** TAPEBACK_AUTO_STOP_HOURS caps a recording, TAPEBACK_AUTO_STOP_SILENCE_MINUTES stops one after sustained silence on both channels, TAPEBACK_AUDIO_RETENTION_DAYS deletes old vault audio once its transcript was uploaded to meetings-mcp.
+- **TAPEBACK_MIN_SPEAKERS.** New diarization setting passed to pyannote as min_speakers — biases clustering toward at least N speakers when voices merge into one.
 
 ### Fixed
 - **Tray icon invisible on COSMIC.** The tray now registers the full bus-name/object-path form, ships real IconPixmap bitmaps plus tapeback-* PNGs under IconThemePath and the user's hicolor theme, and a blank TAPEBACK_AUTO_STOP_* / TAPEBACK_AUDIO_RETENTION_DAYS value disables the knob instead of crashing startup.

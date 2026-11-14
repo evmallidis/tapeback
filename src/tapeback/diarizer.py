@@ -143,11 +143,12 @@ class Diarizer:
     def _run_pipeline(self, audio_path: Path) -> Any:
         """Run pyannote pipeline with optional max_speakers, reporting progress."""
         progress = _Progress(_wav_seconds(audio_path), self._report)
+        kwargs: dict = {}
         if self._settings.max_speakers is not None:
-            return self._pipeline(
-                audio_path, max_speakers=self._settings.max_speakers, hook=progress
-            )
-        return self._pipeline(audio_path, hook=progress)
+            kwargs["max_speakers"] = self._settings.max_speakers
+        if self._settings.min_speakers is not None:
+            kwargs["min_speakers"] = self._settings.min_speakers
+        return self._pipeline(audio_path, hook=progress, **kwargs)
 
     def diarize(self, audio_path: Path) -> list[DiarizationSegment]:
         """Run diarization on audio file.

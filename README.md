@@ -503,6 +503,7 @@ setting may start with `~`, your home directory.
 | `TAPEBACK_DIARIZE` | `true` | Enable speaker diarization |
 | `TAPEBACK_HF_TOKEN` | *(empty)* | HuggingFace token ([setup](#speaker-diarization)) |
 | `TAPEBACK_MAX_SPEAKERS` | *(auto)* | Maximum number of speakers |
+| `TAPEBACK_MIN_SPEAKERS` | *(auto)* | Minimum number of speakers — biases pyannote toward at least this many; use when voices merge into one speaker |
 | `TAPEBACK_CLUSTERING_THRESHOLD` | *(pyannote default)* | Speaker-clustering threshold passed to pyannote. Lower splits speakers more readily, higher merges them |
 | `TAPEBACK_SPECTRAL_MERGE_THRESHOLD` | `0.96` | Spectral speaker merging (0 = off; lower merges more aggressively) |
 

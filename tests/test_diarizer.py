@@ -747,3 +747,55 @@ def test_merge_similar_speakers_early_return(segments):
     sr = 16000
     audio = np.zeros(int(3.0 * sr), dtype=np.float32)
     assert merge_similar_speakers(segments, audio, sr) == segments
+
+
+@requires_pyannote
+def test_diarize_passes_min_and_max_speakers(tmp_vault):
+    """min_speakers/max_speakers settings must reach the pyannote pipeline call."""
+    settings = Settings(
+        vault_path=tmp_vault,
+        hf_token=SecretStr("hf_fake"),
+        device="cpu",
+        min_speakers=2,
+        max_speakers=5,
+    )
+
+    mock_turn = MagicMock()
+    mock_turn.start = 0.0
+    mock_turn.end = 1.0
+    mock_annotation = MagicMock()
+    mock_annotation.itertracks.return_value = [(mock_turn, None, "SPEAKER_00")]
+
+    with patch("pyannote.audio.Pipeline") as mock_cls:
+        mock_pipeline = MagicMock()
+        mock_cls.from_pretrained.return_value = mock_pipeline
+        mock_pipeline.return_value = mock_annotation
+
+        diarizer = Diarizer(settings)
+        diarizer.diarize(Path("/fake/audio.wav"))
+
+    assert mock_pipeline.call_args.kwargs["min_speakers"] == 2
+    assert mock_pipeline.call_args.kwargs["max_speakers"] == 5
+
+
+@requires_pyannote
+def test_diarize_omits_speaker_bounds_when_unset(tmp_vault):
+    """Unset bounds must not appear in the call — pyannote's auto mode stays."""
+    settings = Settings(vault_path=tmp_vault, hf_token=SecretStr("hf_fake"), device="cpu")
+
+    mock_turn = MagicMock()
+    mock_turn.start = 0.0
+    mock_turn.end = 1.0
+    mock_annotation = MagicMock()
+    mock_annotation.itertracks.return_value = [(mock_turn, None, "SPEAKER_00")]
+
+    with patch("pyannote.audio.Pipeline") as mock_cls:
+        mock_pipeline = MagicMock()
+        mock_cls.from_pretrained.return_value = mock_pipeline
+        mock_pipeline.return_value = mock_annotation
+
+        diarizer = Diarizer(settings)
+        diarizer.diarize(Path("/fake/audio.wav"))
+
+    assert "min_speakers" not in mock_pipeline.call_args.kwargs
+    assert "max_speakers" not in mock_pipeline.call_args.kwargs
