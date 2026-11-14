@@ -33,6 +33,8 @@ class StatusNotifierItem(ServiceInterface):
         self._title = title
         self._menu_path = menu_path
         self._icon_name = ""
+        self._icon_pixmaps: list = []
+        self._icon_theme_path = ""
         self._tooltip_title = title
         self._tooltip_text = ""
         self._status = "Active"
@@ -69,7 +71,8 @@ class StatusNotifierItem(ServiceInterface):
 
     @dbus_property(access=PropertyAccess.READ)
     def IconPixmap(self) -> "a(iiay)":  # type: ignore[name-defined]  # ty:ignore[invalid-type-form]
-        return []
+        # COSMIC's applet ignores themed IconName and renders only pixmaps.
+        return self._icon_pixmaps
 
     @dbus_property(access=PropertyAccess.READ)
     def OverlayIconName(self) -> "s":  # type: ignore[name-defined]  # ty:ignore[unresolved-reference]
@@ -108,7 +111,7 @@ class StatusNotifierItem(ServiceInterface):
 
     @dbus_property(access=PropertyAccess.READ)
     def IconThemePath(self) -> "s":  # type: ignore[name-defined]  # ty:ignore[unresolved-reference]
-        return ""
+        return self._icon_theme_path
 
     @dbus_property(access=PropertyAccess.READ)
     def ToolTip(self) -> "(sa(iiay)ss)":  # type: ignore[name-defined]  # ty:ignore[invalid-syntax-in-forward-annotation]
@@ -165,6 +168,10 @@ class StatusNotifierItem(ServiceInterface):
         pass
 
     @signal()
+    def NewIconThemePath(self) -> "s":  # type: ignore[name-defined]  # ty:ignore[unresolved-reference]
+        return self._icon_theme_path
+
+    @signal()
     def NewToolTip(self) -> None:
         pass
 
@@ -174,9 +181,15 @@ class StatusNotifierItem(ServiceInterface):
 
     # --- public helpers (called from app code) -------------------------------
 
-    def set_icon(self, icon_name: str) -> None:
+    def set_icon(self, icon_name: str, pixmaps: list | None = None) -> None:
         self._icon_name = icon_name
+        if pixmaps is not None:
+            self._icon_pixmaps = pixmaps
         self.NewIcon()
+
+    def set_icon_theme_path(self, path: str) -> None:
+        self._icon_theme_path = path
+        self.NewIconThemePath()
 
     def set_tooltip(self, title: str, text: str = "") -> None:
         self._tooltip_title = title

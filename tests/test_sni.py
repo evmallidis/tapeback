@@ -13,7 +13,8 @@ from tapeback._sni import StatusNotifierItem, register_with_watcher  # noqa: E40
 
 
 def test_register_with_watcher_registers_service_name():
-    """register_with_watcher introspects the watcher and registers our bus name."""
+    """register_with_watcher introspects the watcher and registers the
+    name/path form the caller built (watchers key items on name/path)."""
     iface = MagicMock()
     iface.call_register_status_notifier_item = AsyncMock()
     proxy = MagicMock()
@@ -22,10 +23,12 @@ def test_register_with_watcher_registers_service_name():
     bus.introspect = AsyncMock(return_value="<node/>")
     bus.get_proxy_object.return_value = proxy
 
-    asyncio.run(register_with_watcher(bus, ":1.42"))
+    asyncio.run(register_with_watcher(bus, ":1.42/StatusNotifierItem"))
 
     bus.introspect.assert_awaited_once()
-    iface.call_register_status_notifier_item.assert_awaited_once_with(":1.42")
+    iface.call_register_status_notifier_item.assert_awaited_once_with(
+        ":1.42/StatusNotifierItem"
+    )
 
 
 # --- integration ---
@@ -74,6 +77,11 @@ def test_sni_full_lifecycle_flow():
     sni.set_tooltip("tapeback", "Recording (standup)")
     assert sni.IconName == "media-record-symbolic"
     assert sni.ToolTip == ["", [], "tapeback", "Recording (standup)"]
+
+    # IconThemePath is writable; the NewIconThemePath signal carries it.
+    sni.set_icon_theme_path("/opt/icons")
+    assert sni.IconThemePath == "/opt/icons"
+    assert sni.NewIconThemePath() == "/opt/icons"
 
     # Processing -> attention; NewStatus signal carries the new value.
     sni.set_status("NeedsAttention")

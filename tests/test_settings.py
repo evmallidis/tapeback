@@ -164,3 +164,16 @@ def test_live_min_chunk_gt_interval_allowed_when_live_disabled(tmp_vault):
     """The chunk/interval check only applies when live transcription is enabled."""
     s = Settings(vault_path=tmp_vault, live=False, live_interval=10, live_min_chunk=30.0)
     assert s.live is False
+
+
+def test_blank_auto_stop_env_disables(monkeypatch, vault_env):
+    """A blank TAPEBACK_* numeric knob in .env disables it rather than
+    crashing Settings with a float-parsing ValidationError."""
+    monkeypatch.setenv("TAPEBACK_AUTO_STOP_HOURS", "")
+    monkeypatch.setenv("TAPEBACK_AUTO_STOP_SILENCE_MINUTES", "")
+    monkeypatch.setenv("TAPEBACK_AUDIO_RETENTION_DAYS", "")
+
+    s = Settings()
+    assert s.auto_stop_hours == 0.0
+    assert s.auto_stop_silence_minutes == 0.0
+    assert s.audio_retention_days == 0

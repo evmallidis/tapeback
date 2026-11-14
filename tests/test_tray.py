@@ -213,6 +213,9 @@ def test_quit_during_processing_does_not_stop_recorder(tray_app):
 
 def test_update_state_sets_icon_tooltip_and_refreshes_menu(tray_app):
     tray_app._update_state(TrayState.RECORDING)
-    tray_app._sni.set_icon.assert_called_once_with("media-record-symbolic")
+    name, pixmaps = tray_app._sni.set_icon.call_args.args
+    assert name == "tapeback-recording"
+    assert len(pixmaps) == 1
+    assert pixmaps[0][0] == 22 and pixmaps[0][1] == 22
     tray_app._sni.set_tooltip.assert_called_once()
     tray_app._menu.replace_items.assert_called_once()

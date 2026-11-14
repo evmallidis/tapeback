@@ -2,13 +2,16 @@
 
 import asyncio
 import logging
+import os
 import threading
 from collections.abc import Callable
 from enum import Enum, auto
+from pathlib import Path
 
 from dbus_next import BusType
 from dbus_next.aio import MessageBus
 
+from tapeback import _tray_icons
 from tapeback._dbusmenu import MENU_OBJECT_PATH, DBusMenu, MenuItem
 from tapeback._sni import SNI_OBJECT_PATH, StatusNotifierItem, register_with_watcher
 from tapeback._tray_env import TrayEnv, detect_tray_env
@@ -25,12 +28,33 @@ class TrayState(Enum):
     PROCESSING = auto()
 
 
-# Freedesktop-standard theme icon names — present on every modern icon theme.
+# tapeback-specific icon names: resolved as real PNGs under our own
+# IconThemePath (see _tray_icons.write_icon_theme), not the system theme.
 _STATE_ICONS: dict[TrayState, str] = {
-    TrayState.IDLE: "audio-input-microphone-symbolic",
-    TrayState.RECORDING: "media-record-symbolic",
-    TrayState.PROCESSING: "process-working-symbolic",
+    TrayState.IDLE: "tapeback-idle",
+    TrayState.RECORDING: "tapeback-recording",
+    TrayState.PROCESSING: "tapeback-processing",
 }
+
+# Real bitmaps alongside the themed names: COSMIC's applet renders only pixmaps.
+_STATE_PIXMAPS = {
+    TrayState.IDLE: [_tray_icons.IDLE_PIXMAP],
+    TrayState.RECORDING: [_tray_icons.RECORDING_PIXMAP],
+    TrayState.PROCESSING: [_tray_icons.PROCESSING_PIXMAP],
+}
+
+
+def _icon_theme_dir() -> Path:
+    """Install the PNG icons once per run and return their IconThemePath dir.
+
+    Icons go both into an IconThemePath directory and into the user's hicolor
+    theme — applets resolve IconName through either one or the other.
+    """
+    xdg = os.environ.get("XDG_DATA_HOME")
+    base = Path(xdg) if xdg else Path.home() / ".local" / "share"
+    _tray_icons.install_hicolor_icons(base)
+    return _tray_icons.write_icon_theme(base / "tapeback" / "icons")
+
 
 # Stable menu IDs referenced by DBusMenu.Event handler.
 _ID_START = 1
@@ -105,7 +129,8 @@ class TrayApp:
             title="tapeback",
             menu_path=MENU_OBJECT_PATH,
         )
-        self._sni.set_icon(_STATE_ICONS[self._state])
+        self._sni.set_icon_theme_path(str(_icon_theme_dir()))
+        self._sni.set_icon(_STATE_ICONS[self._state], _STATE_PIXMAPS[self._state])
         self._sni.set_tooltip("tapeback", self._tooltip_text())
         self._sni.set_callbacks(on_activate=self._on_activate)
 
@@ -119,7 +144,10 @@ class TrayApp:
             # name to register and the tray is unreachable anyway.
             raise RuntimeError("D-Bus connect returned without a unique name")
         try:
-            await register_with_watcher(self._bus, unique_name)
+            # Full "bus-name/object-path" form: some watchers (COSMIC's applet)
+            # do not resolve a bare bus name to the default SNI path, and the
+            # icon never renders.
+            await register_with_watcher(self._bus, f"{unique_name}{SNI_OBJECT_PATH}")
             logger.info("Tray registered with StatusNotifierWatcher")
         except Exception:
             logger.exception("Failed to register with StatusNotifierWatcher")
@@ -155,7 +183,7 @@ class TrayApp:
         """Called from the loop thread — updates SNI + menu in place."""
         self._state = new_state
         if self._sni is not None:
-            self._sni.set_icon(_STATE_ICONS[new_state])
+            self._sni.set_icon(_STATE_ICONS[new_state], _STATE_PIXMAPS[new_state])
             self._sni.set_tooltip("tapeback", self._tooltip_text())
         if self._menu is not None:
             self._menu.replace_items(self._current_menu_items())

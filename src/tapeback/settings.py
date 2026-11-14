@@ -282,6 +282,18 @@ class Settings(BaseSettings):
     # when its transcript was confirmed uploaded to meetings-mcp. 0 = keep everything.
     audio_retention_days: int = Field(default=0, ge=0)
 
+    @field_validator(
+        "auto_stop_hours",
+        "auto_stop_silence_minutes",
+        "audio_retention_days",
+        mode="before",
+    )
+    @classmethod
+    def _empty_means_disabled(cls, value: object) -> object:
+        """A blank `TAPEBACK_AUTO_STOP_HOURS=` in .env disables the knob instead of
+        failing numeric parsing and taking the whole app down."""
+        return 0 if value == "" else value
+
     @model_validator(mode="after")
     def _resolve_stt_settings(self) -> Self:
         """Resolve stt_model defaults; accept deprecated TAPEBACK_WHISPER_MODEL."""
